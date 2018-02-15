@@ -6,7 +6,7 @@
 #define FIVE_MINUTES    (1000 * 60 * 5)
 
 bool g_lightsOff;
-int g_millisToTurnOff;
+unsigned long g_millisToTurnOff;
 
 bool isDark()
 {
@@ -18,7 +18,7 @@ bool isDark()
     return false;
 }
 
-void turnLightsOn()
+int turnLightsOn(String)
 {
     digitalWrite(ON_BUTTON, 1);
     delay(1);
@@ -27,13 +27,13 @@ void turnLightsOn()
     g_millisToTurnOff = millis();
 }
 
-void turnLightsOff()
+int turnLightsOff(String)
 {
     digitalWrite(OFF_BUTTON, 1);
     delay(1);
     digitalWrite(OFF_BUTTON, 0);
     g_lightsOff = true;
-    g_millisToTurnOff = -1;
+    g_millisToTurnOff = 0;
 }
 
 void setup()
@@ -43,23 +43,28 @@ void setup()
     pinMode(MOTION_DETECT, INPUT_PULLUP);
     pinMode(LIGHT_DETECT, INPUT);
 
+    Particle.function("On", turnLightsOn);
+    Particle.function("Off", turnLightsOff);
+    
     g_lightsOff = true;
-    g_millisToTurnOff = -1;
+    g_millisToTurnOff = 0;
+
+    turnLightsOff(String());
 }
 
 void loop()
 {
     if (digitalRead(MOTION_DETECT) == 0) {
         if (isDark() && g_lightsOff) {
-            turnLightsOn();
+            turnLightsOn(String());
         }
     }
-    if (g_millisToTurnOff != -1) {
+    if (g_millisToTurnOff != 0) {
         if (millis() < g_millisToTurnOff) {
-            turnLightsOff();    // Millis wrapper, so just flip the switch off
+            turnLightsOff(String());    // Millis wrapper, so just flip the switch off
         }
         else if ((millis() - g_millisToTurnOff) > FIVE_MINUTES) {
-            turnLightsOff();
+            turnLightsOff(String());
         }
     }
 }
