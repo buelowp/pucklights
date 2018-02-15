@@ -12,7 +12,7 @@ bool isDark()
 {
     int lux = analogRead(LIGHT_DETECT);
 
-    if (lux > 500)
+    if (lux < 100)
         return true;
 
     return false;
@@ -45,7 +45,7 @@ void setup()
 
     Particle.function("On", turnLightsOn);
     Particle.function("Off", turnLightsOff);
-    
+
     g_lightsOff = true;
     g_millisToTurnOff = 0;
 
