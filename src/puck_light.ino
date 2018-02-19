@@ -24,16 +24,28 @@ bool isDark()
     return false;
 }
 
+/*
+ * Turn the lights on. This will simply reset the current
+ * time off timer each time it observes movement.
+ */
 int turnLightsOn(String)
 {
-    digitalWrite(ON_BUTTON, HIGH);
-    delay(100);
-    digitalWrite(ON_BUTTON, LOW);
-    g_lightsOn = true;
+    if (!g_lightsOn) {
+        digitalWrite(ON_BUTTON, HIGH);
+        delay(100);
+        digitalWrite(ON_BUTTON, LOW);
+        g_lightsOn = true;
+    }
     g_timeOut = millis() + FIVE_MINUTES;
     return 1;
 }
 
+/*
+ * Turn the lights off
+ * This includes resetting the lights are on flag, setting the turn off
+ * timer to 0, and starting the lockout timer which keeps stray events
+ * from happening as the 433Mh radio tends to activate the motion sensor.
+ */
 int turnLightsOff(String)
 {
     digitalWrite(OFF_BUTTON, HIGH);
@@ -92,7 +104,7 @@ void loop()
 
     if (digitalRead(MOTION_DETECT) == HIGH) {
         g_motionDetected = true;
-        if (isDark() && !g_lightsOn && (g_detectRemain == 0)) {
+        if (isDark() && (g_detectRemain == 0)) {
             turnLightsOn(String());
         }
     }
