@@ -1,18 +1,24 @@
-#define ON_BUTTON   D2
-#define OFF_BUTTON  D1
-#define MOTION_DETECT   A0
-#define LIGHT_DETECT    A2
+#define ON_BUTTON           D1
+#define OFF_BUTTON          D5
+#define MOTION_DETECT       D2
+#define LIGHT_DETECT        A1
+#define VERSION             40
 
-#define FIVE_MINUTES    (1000 * 60 * 5)
+#define FIVE_MINUTES        (1000 * 60 * 5)
+#define TWENTY_SECONDS      (1000 * 20)
+#define ONE_MINUTE          (1000 * 60 * 1)
 
-bool g_lightsOff;
-unsigned long g_millisToTurnOff;
+bool g_lightsOn;
+unsigned long g_millis;
+int g_lux;
+int g_version;
+bool g_motionDetected;
+unsigned long g_timeOut;
+unsigned long g_detectRemain;
 
 bool isDark()
 {
-    int lux = analogRead(LIGHT_DETECT);
-
-    if (lux < 100)
+    if (g_lux < 800)
         return true;
 
     return false;
@@ -20,51 +26,77 @@ bool isDark()
 
 int turnLightsOn(String)
 {
-    digitalWrite(ON_BUTTON, 1);
-    delay(1);
-    digitalWrite(ON_BUTTON, 0);
-    g_lightsOff = false;
-    g_millisToTurnOff = millis();
+    digitalWrite(ON_BUTTON, HIGH);
+    delay(100);
+    digitalWrite(ON_BUTTON, LOW);
+    g_lightsOn = true;
+    g_timeOut = millis() + FIVE_MINUTES;
+    return 1;
 }
 
 int turnLightsOff(String)
 {
-    digitalWrite(OFF_BUTTON, 1);
-    delay(1);
-    digitalWrite(OFF_BUTTON, 0);
-    g_lightsOff = true;
-    g_millisToTurnOff = 0;
+    digitalWrite(OFF_BUTTON, HIGH);
+    delay(100);
+    digitalWrite(OFF_BUTTON, LOW);
+    g_lightsOn = false;
+    g_timeOut = 0;
+    g_detectRemain = millis() + TWENTY_SECONDS;
+    return 0;
 }
 
 void setup()
 {
     pinMode(ON_BUTTON, OUTPUT);
     pinMode(OFF_BUTTON, OUTPUT);
-    pinMode(MOTION_DETECT, INPUT_PULLUP);
+    pinMode(MOTION_DETECT, INPUT_PULLDOWN);
     pinMode(LIGHT_DETECT, INPUT);
+
+    digitalWrite(ON_BUTTON, LOW);
+    digitalWrite(OFF_BUTTON, LOW);
 
     Particle.function("On", turnLightsOn);
     Particle.function("Off", turnLightsOff);
+    Particle.variable("lux", g_lux);
+    Particle.variable("version", g_version);
+    Particle.variable("motion", g_motionDetected);
+    Particle.variable("millis", g_millis);
+    Particle.variable("lockout", g_detectRemain);
 
-    g_lightsOff = true;
-    g_millisToTurnOff = 0;
+    g_lightsOn = false;
+    g_timeOut = 0;
+    g_motionDetected = false;
+    g_millis = millis();
+    g_detectRemain = 0;
+    g_version = VERSION;
 
     turnLightsOff(String());
 }
 
 void loop()
 {
-    if (digitalRead(MOTION_DETECT) == 0) {
-        if (isDark() && g_lightsOff) {
+    g_millis = millis();
+    // Give the PIR about a minute to settle down to avoid
+    // false positives.
+    if (g_millis < ONE_MINUTE)
+        return;
+
+    g_lux = analogRead(LIGHT_DETECT);
+
+    if (g_detectRemain < millis()) {
+        g_detectRemain = 0;
+    }
+
+    if (g_timeOut < millis() && g_lightsOn)
+        turnLightsOff(String());
+
+    if (digitalRead(MOTION_DETECT) == HIGH) {
+        g_motionDetected = true;
+        if (isDark() && !g_lightsOn && (g_detectRemain == 0)) {
             turnLightsOn(String());
         }
     }
-    if (g_millisToTurnOff != 0) {
-        if (millis() < g_millisToTurnOff) {
-            turnLightsOff(String());    // Millis wrapper, so just flip the switch off
-        }
-        else if ((millis() - g_millisToTurnOff) > FIVE_MINUTES) {
-            turnLightsOff(String());
-        }
+    else {
+        g_motionDetected = false;
     }
 }
