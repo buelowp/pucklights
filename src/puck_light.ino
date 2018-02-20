@@ -2,7 +2,7 @@
 #define OFF_BUTTON          D5
 #define MOTION_DETECT       D2
 #define LIGHT_DETECT        A1
-#define VERSION             40
+#define VERSION             41
 
 #define FIVE_MINUTES        (1000 * 60 * 5)
 #define TWENTY_SECONDS      (1000 * 20)
@@ -18,7 +18,7 @@ unsigned long g_detectRemain;
 
 bool isDark()
 {
-    if (g_lux < 800)
+    if (g_lux < 300)
         return true;
 
     return false;
@@ -74,6 +74,7 @@ void setup()
     Particle.variable("motion", g_motionDetected);
     Particle.variable("millis", g_millis);
     Particle.variable("lockout", g_detectRemain);
+    Particle.variable("lights", g_lightsOn);
 
     g_lightsOn = false;
     g_timeOut = 0;
@@ -83,6 +84,7 @@ void setup()
     g_version = VERSION;
 
     turnLightsOff(String());
+    g_lux = analogRead(LIGHT_DETECT);
 }
 
 void loop()
