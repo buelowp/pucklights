@@ -2,7 +2,7 @@
 #define OFF_BUTTON          D5
 #define MOTION_DETECT       D2
 #define LIGHT_DETECT        A1
-#define VERSION             41
+#define VERSION             44
 
 #define FIVE_MINUTES        (1000 * 60 * 5)
 #define TWENTY_SECONDS      (1000 * 20)
@@ -18,7 +18,7 @@ unsigned long g_detectRemain;
 
 bool isDark()
 {
-    if (g_lux < 300)
+    if (g_lux < 150)
         return true;
 
     return false;
@@ -101,8 +101,10 @@ void loop()
         g_detectRemain = 0;
     }
 
-    if (g_timeOut < millis() && g_lightsOn)
+    if (g_timeOut < millis() && g_lightsOn) {
         turnLightsOff(String());
+        return;
+    }
 
     if (digitalRead(MOTION_DETECT) == HIGH) {
         g_motionDetected = true;
