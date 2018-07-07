@@ -2,7 +2,7 @@
 #define OFF_BUTTON          D5
 #define MOTION_DETECT       D2
 #define LIGHT_DETECT        A1
-#define VERSION             45
+#define VERSION             49
 
 #define FIVE_MINUTES        (1000 * 60 * 5)
 #define TWENTY_SECONDS      (1000 * 20)
@@ -15,14 +15,6 @@ int g_version;
 bool g_motionDetected;
 unsigned long g_timeOut;
 unsigned long g_detectRemain;
-
-bool isDark()
-{
-    if (g_lux < 100)
-        return true;
-
-    return false;
-}
 
 /*
  * Turn the lights on. This will simply reset the current
@@ -85,13 +77,12 @@ void setup()
 
 void loop()
 {
+    g_lux = analogRead(LIGHT_DETECT);
     g_millis = millis();
     // Give the PIR about a minute to settle down to avoid
     // false positives.
     if (g_millis < ONE_MINUTE)
         return;
-
-    g_lux = analogRead(LIGHT_DETECT);
 
     if (g_detectRemain < millis()) {
         g_detectRemain = 0;
@@ -104,7 +95,7 @@ void loop()
 
     if (digitalRead(MOTION_DETECT) == HIGH) {
         g_motionDetected = true;
-        if (isDark() && (g_detectRemain == 0)) {
+        if ((g_lux < 50) && (g_detectRemain == 0)) {
             turnLightsOn(String());
         }
     }
