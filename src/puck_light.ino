@@ -2,15 +2,19 @@
 #define OFF_BUTTON          D5
 #define MOTION_DETECT       D2
 #define LIGHT_DETECT        A1
-#define VERSION             49
+#define VERSION             53
 
 #define FIVE_MINUTES        (1000 * 60 * 5)
 #define TWENTY_SECONDS      (1000 * 20)
 #define ONE_MINUTE          (1000 * 60 * 1)
 
+#define DEFAULT_TRIGGER     25
+
 bool g_lightsOn;
 unsigned long g_millis;
 int g_lux;
+int g_luxCloud;
+int g_minLux;
 int g_version;
 bool g_motionDetected;
 unsigned long g_timeOut;
@@ -49,6 +53,11 @@ int turnLightsOff(String)
     return 0;
 }
 
+int setLuxValue(String lux)
+{
+
+}
+
 void setup()
 {
     pinMode(ON_BUTTON, OUTPUT);
@@ -61,7 +70,9 @@ void setup()
 
     Particle.function("On", turnLightsOn);
     Particle.function("Off", turnLightsOff);
+    Particle.function("SetLux", setLuxValue);
     Particle.variable("lux", g_lux);
+    Particle.variable("min", g_minLux);
     Particle.variable("version", g_version);
 
     g_lightsOn = false;
@@ -70,6 +81,8 @@ void setup()
     g_millis = millis();
     g_detectRemain = 0;
     g_version = VERSION;
+    g_luxCloud = 0;
+    g_minLux = 5000;
 
     turnLightsOff(String());
     g_lux = analogRead(LIGHT_DETECT);
@@ -77,7 +90,14 @@ void setup()
 
 void loop()
 {
+    int trigger = DEFAULT_TRIGGER;
     g_lux = analogRead(LIGHT_DETECT);
+    if (g_minLux >= g_lux)
+        g_minLux = g_lux;
+
+    if (g_luxCloud != 0) {
+        trigger = g_luxCloud;
+    }
     g_millis = millis();
     // Give the PIR about a minute to settle down to avoid
     // false positives.
@@ -95,7 +115,7 @@ void loop()
 
     if (digitalRead(MOTION_DETECT) == HIGH) {
         g_motionDetected = true;
-        if ((g_lux < 50) && (g_detectRemain == 0)) {
+        if ((g_lux < trigger) && (g_detectRemain == 0)) {
             turnLightsOn(String());
         }
     }
