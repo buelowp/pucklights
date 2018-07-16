@@ -1,21 +1,27 @@
+#include <FastLED.h>
+
+using namespace NSFastLED;
+
 #define ON_BUTTON           D1
 #define OFF_BUTTON          D5
 #define MOTION_DETECT       D2
 #define LIGHT_DETECT        A1
-#define VERSION             53
-
-#define FIVE_MINUTES        (1000 * 60 * 5)
-#define TWENTY_SECONDS      (1000 * 20)
-#define ONE_MINUTE          (1000 * 60 * 1)
-
+#define VERSION             55
 #define DEFAULT_TRIGGER     25
+
+#define ONE_SECOND          (1000)
+#define TWENTY_SECONDS      (ONE_SECOND * 20)
+#define ONE_MINUTE          (ONE_SECOND * 60)
+#define FIVE_MINUTES        (ONE_MINUTE * 5)
+#define ONE_HOUR            (ONE_MINUTE * 60)
+#define TWELVE_HOURS        (ONE_HOUR * 12)
 
 bool g_lightsOn;
 unsigned long g_millis;
 int g_lux;
-int g_luxCloud;
 int g_minLux;
 int g_version;
+int g_trigger;
 bool g_motionDetected;
 unsigned long g_timeOut;
 unsigned long g_detectRemain;
@@ -53,9 +59,10 @@ int turnLightsOff(String)
     return 0;
 }
 
-int setLuxValue(String lux)
+int setLuxTriggerValue(String lux)
 {
-
+    g_trigger = lux.toInt();
+    return g_trigger;
 }
 
 void setup()
@@ -70,10 +77,11 @@ void setup()
 
     Particle.function("On", turnLightsOn);
     Particle.function("Off", turnLightsOff);
-    Particle.function("SetLux", setLuxValue);
+    Particle.function("SetTrigger", setLuxTriggerValue);
     Particle.variable("lux", g_lux);
     Particle.variable("min", g_minLux);
     Particle.variable("version", g_version);
+    Particle.variable("trigger", g_trigger);
 
     g_lightsOn = false;
     g_timeOut = 0;
@@ -81,8 +89,8 @@ void setup()
     g_millis = millis();
     g_detectRemain = 0;
     g_version = VERSION;
-    g_luxCloud = 0;
     g_minLux = 5000;
+    g_trigger = DEFAULT_TRIGGER;
 
     turnLightsOff(String());
     g_lux = analogRead(LIGHT_DETECT);
@@ -90,19 +98,14 @@ void setup()
 
 void loop()
 {
-    int trigger = DEFAULT_TRIGGER;
+    // Give the PIR about a minute to settle down to avoid
+    // false positives.
+    if (millis() < ONE_MINUTE)
+        return;
+
     g_lux = analogRead(LIGHT_DETECT);
     if (g_minLux >= g_lux)
         g_minLux = g_lux;
-
-    if (g_luxCloud != 0) {
-        trigger = g_luxCloud;
-    }
-    g_millis = millis();
-    // Give the PIR about a minute to settle down to avoid
-    // false positives.
-    if (g_millis < ONE_MINUTE)
-        return;
 
     if (g_detectRemain < millis()) {
         g_detectRemain = 0;
@@ -115,11 +118,16 @@ void loop()
 
     if (digitalRead(MOTION_DETECT) == HIGH) {
         g_motionDetected = true;
-        if ((g_lux < trigger) && (g_detectRemain == 0)) {
+        if ((g_lux < g_trigger) && (g_detectRemain == 0)) {
             turnLightsOn(String());
         }
     }
     else {
         g_motionDetected = false;
+    }
+
+    EVERY_N_MILLISECONDS(TWELVE_HOURS) {
+        Particle.syncTime();
+        g_minLux = 25000;
     }
 }
