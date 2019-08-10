@@ -1,12 +1,8 @@
-#include <FastLED.h>
-
-using namespace NSFastLED;
-
 #define ON_BUTTON           D1
 #define OFF_BUTTON          D5
 #define MOTION_DETECT       D2
 #define LIGHT_DETECT        A1
-#define VERSION             55
+#define APP_ID             57
 #define DEFAULT_TRIGGER     25
 
 #define ONE_SECOND          (1000)
@@ -17,14 +13,12 @@ using namespace NSFastLED;
 #define TWELVE_HOURS        (ONE_HOUR * 12)
 
 bool g_lightsOn;
-unsigned long g_millis;
 int g_lux;
-int g_minLux;
-int g_version;
+int g_appid;
 int g_trigger;
 bool g_motionDetected;
+unsigned long g_debounce;
 unsigned long g_timeOut;
-unsigned long g_detectRemain;
 
 /*
  * Turn the lights on. This will simply reset the current
@@ -55,7 +49,7 @@ int turnLightsOff(String)
     digitalWrite(OFF_BUTTON, LOW);
     g_lightsOn = false;
     g_timeOut = 0;
-    g_detectRemain = millis() + TWENTY_SECONDS;
+    g_debounce = millis() + TWENTY_SECONDS;
     return 0;
 }
 
@@ -72,6 +66,9 @@ void setup()
     pinMode(MOTION_DETECT, INPUT_PULLDOWN);
     pinMode(LIGHT_DETECT, INPUT);
 
+    g_appid = APP_ID;
+    g_trigger = DEFAULT_TRIGGER;
+
     digitalWrite(ON_BUTTON, LOW);
     digitalWrite(OFF_BUTTON, LOW);
 
@@ -79,55 +76,44 @@ void setup()
     Particle.function("Off", turnLightsOff);
     Particle.function("SetTrigger", setLuxTriggerValue);
     Particle.variable("lux", g_lux);
-    Particle.variable("min", g_minLux);
-    Particle.variable("version", g_version);
+    Particle.variable("version", g_appid);
     Particle.variable("trigger", g_trigger);
+    Particle.variable("state", g_lightsOn);
 
     g_lightsOn = false;
     g_timeOut = 0;
     g_motionDetected = false;
-    g_millis = millis();
-    g_detectRemain = 0;
-    g_version = VERSION;
-    g_minLux = 5000;
-    g_trigger = DEFAULT_TRIGGER;
+    g_debounce = 0;
 
-    turnLightsOff(String());
-    g_lux = analogRead(LIGHT_DETECT);
+    turnLightsOff(String());    // Set lights off if we restart
+    g_lux = analogRead(LIGHT_DETECT); // Allow us to see the value before we start the loop
+    delay(ONE_MINUTE);      // Let the motion detect circuit settle
 }
 
 void loop()
 {
-    // Give the PIR about a minute to settle down to avoid
-    // false positives.
-    if (millis() < ONE_MINUTE)
+    g_lux = analogRead(LIGHT_DETECT);
+
+    if (g_timeOut >= millis())
         return;
 
-    g_lux = analogRead(LIGHT_DETECT);
-    if (g_minLux >= g_lux)
-        g_minLux = g_lux;
-
-    if (g_detectRemain < millis()) {
-        g_detectRemain = 0;
-    }
-
-    if (g_timeOut < millis() && g_lightsOn) {
+    if (g_lightsOn) {
         turnLightsOff(String());
         return;
     }
 
     if (digitalRead(MOTION_DETECT) == HIGH) {
         g_motionDetected = true;
-        if ((g_lux < g_trigger) && (g_detectRemain == 0)) {
+        if (g_debounce >= millis())
+            return;
+        else
+            g_debounce = 0;
+
+        if (g_lux < g_trigger) {
             turnLightsOn(String());
         }
     }
     else {
         g_motionDetected = false;
-    }
-
-    EVERY_N_MILLISECONDS(TWELVE_HOURS) {
-        Particle.syncTime();
-        g_minLux = 25000;
     }
 }
