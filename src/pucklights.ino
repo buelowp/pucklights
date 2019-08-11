@@ -2,7 +2,7 @@
 #define OFF_BUTTON          D5
 #define MOTION_DETECT       D2
 #define LIGHT_DETECT        A1
-#define APP_ID             57
+#define APP_ID             58
 #define DEFAULT_TRIGGER     25
 
 #define ONE_SECOND          (1000)
@@ -16,6 +16,7 @@ bool g_lightsOn;
 int g_lux;
 int g_appid;
 int g_trigger;
+int g_turnOnLux;
 bool g_motionDetected;
 unsigned long g_debounce;
 unsigned long g_timeOut;
@@ -68,6 +69,7 @@ void setup()
 
     g_appid = APP_ID;
     g_trigger = DEFAULT_TRIGGER;
+    g_turnOnLux = 0;
 
     digitalWrite(ON_BUTTON, LOW);
     digitalWrite(OFF_BUTTON, LOW);
@@ -79,6 +81,7 @@ void setup()
     Particle.variable("version", g_appid);
     Particle.variable("trigger", g_trigger);
     Particle.variable("state", g_lightsOn);
+    Particle.variable("turnonlux", g_turnOnLux);
 
     g_lightsOn = false;
     g_timeOut = 0;
@@ -110,6 +113,7 @@ void loop()
             g_debounce = 0;
 
         if (g_lux < g_trigger) {
+            g_turnOnLux = g_lux;
             turnLightsOn(String());
         }
     }
