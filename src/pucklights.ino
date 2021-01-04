@@ -2,7 +2,7 @@
 #define OFF_BUTTON          D5
 #define MOTION_DETECT       D2
 #define LIGHT_DETECT        A1
-#define APP_ID              65
+#define APP_ID              66
 #define DEFAULT_TRIGGER     25
 #define ARRAY_SIZE          50
 
@@ -29,6 +29,7 @@ int g_trigger;
 int g_turnOnLux;
 int g_arrayIndex;
 int g_average;
+int g_highCount;
 bool g_motionDetected;
 unsigned long g_debounce;
 unsigned long g_timeOut;
@@ -56,11 +57,7 @@ int currentTimeZone()
     return CST_OFFSET;
 }
 
-/*
- * Turn the lights on. This will simply reset the current
- * time off timer each time it observes movement.
- */
-int turnLightsOn(String)
+void turnLightsOn()
 {
     if (!g_lightsOn) {
         digitalWrite(ON_BUTTON, HIGH);
@@ -69,7 +66,26 @@ int turnLightsOn(String)
         g_lightsOn = true;
     }
     g_timeOut = millis() + FOUR_MINUTES;
+}
+
+/*
+ * Turn the lights on. This will simply reset the current
+ * time off timer each time it observes movement.
+ */
+int turnLightsOnNet(String)
+{
+    turnLightsOn();
     return 1;
+}
+
+void turnLightsOff()
+{
+    digitalWrite(OFF_BUTTON, HIGH);
+    delay(100);
+    digitalWrite(OFF_BUTTON, LOW);
+    g_lightsOn = false;
+    g_timeOut = 0;
+    g_debounce = millis() + TWENTY_SECONDS;
 }
 
 /*
@@ -78,14 +94,9 @@ int turnLightsOn(String)
  * timer to 0, and starting the lockout timer which keeps stray events
  * from happening as the 433Mh radio tends to activate the motion sensor.
  */
-int turnLightsOff(String)
+int turnLightsOffNet(String)
 {
-    digitalWrite(OFF_BUTTON, HIGH);
-    delay(100);
-    digitalWrite(OFF_BUTTON, LOW);
-    g_lightsOn = false;
-    g_timeOut = 0;
-    g_debounce = millis() + TWENTY_SECONDS;
+    turnLightsOff();
     return 0;
 }
 
@@ -126,12 +137,13 @@ void setup()
     g_motionDetected = false;
     g_debounce = 0;
     g_syncDone = true;
+    g_highCount = 0;
 
     digitalWrite(ON_BUTTON, LOW);
     digitalWrite(OFF_BUTTON, LOW);
 
-    Particle.function("On", turnLightsOn);
-    Particle.function("Off", turnLightsOff);
+    Particle.function("On", turnLightsOnNet);
+    Particle.function("Off", turnLightsOffNet);
     Particle.function("SetTrigger", setLuxTriggerValue);
     Particle.variable("lux", g_lux);
     Particle.variable("version", g_appid);
@@ -144,22 +156,20 @@ void setup()
 
     Time.zone(currentTimeZone());
 
-    turnLightsOff(String());    // Set lights off if we restart
+    turnLightsOff();    // Set lights off if we restart
     g_lux = analogRead(LIGHT_DETECT); // Allow us to see the value before we start the loop
     delay(ONE_MINUTE);      // Let the motion detect circuit settle
 }
 
 void loop()
 {
-    if (Time.hour() == 3 && Time.minute() == 1 && Time.second() == 1) {
-        if (!g_syncDone) {
-            Particle.syncTime();
-            Time.zone(currentTimeZone());
-            g_syncDone = true;
-        }
-    }
-    else {
-        g_syncDone = false;
+    static int lastHour = 25;
+
+    if (Time.hour() != lastHour) {
+        Particle.syncTime();
+        waitUntil(Particle.syncTimeDone);
+        Time.zone(currentTimeZone());
+        lastHour = Time.hour();
     }
 
     g_lux = analogRead(LIGHT_DETECT);
@@ -172,23 +182,29 @@ void loop()
         return;
 
     if (g_lightsOn) {
-        turnLightsOff(String());
+        turnLightsOff();
         return;
     }
 
     if (digitalRead(MOTION_DETECT) == HIGH) {
-        g_motionDetected = true;
-        if (g_debounce >= millis())
+        if (g_debounce >= millis())     // don't turn on within 20 seconds of turning off
             return;
         else
-            g_debounce = 0;
+            g_debounce = 0;             // reset so we can turn on now
 
-        if (g_average < g_trigger) {
+        /**
+         * We need to be both below the trigger, and to have seen
+         * 100 straight events. This should avoid false triggers based on one
+         * off events from the sensor
+         */
+        if ((g_average < g_trigger) && (g_highCount++ >= 100)) {
             g_turnOnLux = g_average;
-            turnLightsOn(String());
+            g_highCount = 0;
+            turnLightsOn();
         }
     }
     else {
         g_motionDetected = false;
+        g_highCount = 0;
     }
 }
