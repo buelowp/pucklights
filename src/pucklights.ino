@@ -1,8 +1,10 @@
+#include "sunset.h"
+
 #define ON_BUTTON           D1
 #define OFF_BUTTON          D5
 #define MOTION_DETECT       D2
 #define LIGHT_DETECT        A1
-#define APP_ID              66
+#define APP_ID              67
 #define DEFAULT_TRIGGER     25
 #define ARRAY_SIZE          50
 
@@ -16,6 +18,8 @@
 #define CST_OFFSET          -6
 #define DST_OFFSET          (CST_OFFSET + 1)
 #define TIME_BASE_YEAR		2019
+#define LATITUDE            42.058102
+#define LONGITUDE           -87.984189
 
 const uint8_t _usDSTStart[22] = { 10, 8,14,13,12,10, 9, 8,14,12,11,10, 9,14,13,12,11, 9};
 const uint8_t _usDSTEnd[22]   = { 3, 1, 7, 6, 5, 3, 2, 1, 7, 5, 4, 3, 2, 7, 6, 5, 4, 2};
@@ -34,6 +38,7 @@ bool g_motionDetected;
 unsigned long g_debounce;
 unsigned long g_timeOut;
 int g_luxArray[ARRAY_SIZE];
+SunSet sun(LATITUDE, LONGITUDE, CST_OFFSET);
 
 int currentTimeZone()
 {
@@ -128,6 +133,9 @@ void setup()
     pinMode(MOTION_DETECT, INPUT_PULLDOWN);
     pinMode(LIGHT_DETECT, INPUT);
 
+    digitalWrite(ON_BUTTON, LOW);
+    digitalWrite(OFF_BUTTON, LOW);
+
     g_appid = APP_ID;
     g_trigger = DEFAULT_TRIGGER;
     g_turnOnLux = 0;
@@ -138,9 +146,6 @@ void setup()
     g_debounce = 0;
     g_syncDone = true;
     g_highCount = 0;
-
-    digitalWrite(ON_BUTTON, LOW);
-    digitalWrite(OFF_BUTTON, LOW);
 
     Particle.function("On", turnLightsOnNet);
     Particle.function("Off", turnLightsOffNet);
@@ -155,15 +160,19 @@ void setup()
     Particle.syncTime();
 
     Time.zone(currentTimeZone());
+    sun.setTZOffset(currentTimeZone());
 
     turnLightsOff();    // Set lights off if we restart
     g_lux = analogRead(LIGHT_DETECT); // Allow us to see the value before we start the loop
-    delay(ONE_MINUTE);      // Let the motion detect circuit settle
 }
 
 void loop()
 {
     static int lastHour = 25;
+
+    if (millis() < ONE_SECOND) {
+        return;         // Delay a bit to let the sensors settle.
+    }
 
     if (Time.hour() != lastHour) {
         Particle.syncTime();
@@ -175,7 +184,7 @@ void loop()
     g_lux = analogRead(LIGHT_DETECT);
     averageLux(g_lux);
 
-    if (Time.hour() >= 6 && Time.hour() <= 21)
+    if (Time.hour() >= sun.calcSunrise() && Time.hour() <= sun.calcSunset())
         return;
 
     if (g_timeOut >= millis())
@@ -195,7 +204,7 @@ void loop()
         /**
          * We need to be both below the trigger, and to have seen
          * 100 straight events. This should avoid false triggers based on one
-         * off events from the sensor
+         * off events from the sensor.
          */
         if ((g_average < g_trigger) && (g_highCount++ >= 100)) {
             g_turnOnLux = g_average;
